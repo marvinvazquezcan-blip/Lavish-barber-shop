@@ -2,110 +2,134 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Lavish Barber Shop - Loyalty Program</title>
+<title>Lavish Barber Shop - Loyalty Dashboard</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   body {
-    margin: 0;
-    background: #0f0f0f;
-    color: white;
-    font-family: Arial, sans-serif;
+    margin:0;
+    background: #0b0b0b;
+    font-family: 'Segoe UI', sans-serif;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    height: 100vh;
+    color: white;
+  }
+
+  header {
+    margin-top: 30px;
     text-align: center;
   }
 
-  h1 {
-    margin-top: 30px;
-    font-size: 36px;
+  header h1 {
+    font-size: 38px;
+    letter-spacing: 2px;
   }
 
-  h3 {
-    margin-bottom: 40px;
-    font-weight: normal;
+  .dashboard {
+    width: 90%;
+    max-width: 450px;
+    margin-top: 50px;
+    background: #111;
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 0 25px #00ff88;
   }
 
-  .circle-container {
-    position: relative;
-    width: 300px;
-    height: 300px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .progress-bar-container {
+    width: 100%;
+    background: #222;
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 20px 0;
+    height: 30px;
   }
 
-  #progressCircle {
-    width: 300px;
-    height: 300px;
-    border-radius: 50%;
-    background: conic-gradient(#00ff88 0deg, #222 0deg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: absolute;
-    top: 0;
-    left: 0;
+  .progress-bar {
+    width: 0%;
+    height: 100%;
+    background: #00ff88;
+    transition: width 1s ease;
   }
 
-  #qrcode {
-    position: absolute;
-    width: 150px;
-    height: 150px;
-  }
-
-  #progressText {
-    position: absolute;
-    bottom: -40px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 24px;
+  .progress-text {
+    text-align: center;
+    margin-top: 10px;
     font-weight: bold;
+    font-size: 20px;
+    color: #00ff88;
+    text-shadow: 0 0 8px #00ff88;
   }
 
-  #message {
-    margin-top: 30px;
-    font-size: 20px;
+  .recent-cuts {
+    margin-top: 20px;
+  }
+
+  .recent-cuts h3 {
+    font-weight: 300;
+    font-size: 18px;
+    color: #ccc;
+  }
+
+  .recent-cuts ul {
+    list-style: none;
+    padding: 0;
+    margin-top: 10px;
+  }
+
+  .recent-cuts li {
+    background: #222;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
   }
 
   button {
     margin-top: 30px;
-    padding: 12px 25px;
+    padding: 14px 28px;
     font-size: 18px;
     background: #00ff88;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     cursor: pointer;
     font-weight: bold;
+    box-shadow: 0 0 15px #00ff88;
+    transition: all 0.3s ease;
   }
 
   button:hover {
     background: #00cc66;
+    box-shadow: 0 0 25px #00cc66;
   }
+
 </style>
 </head>
 <body>
 
-<h1>💈 Lavish Barber Shop</h1>
-<h3>Loyalty Program</h3>
+<header>
+  <h1>💈 Lavish Barber Shop</h1>
+  <h3>Loyalty Dashboard</h3>
+</header>
 
-<div class="circle-container">
-  <div id="progressCircle"></div>
-  <div id="qrcode"></div>
-  <div id="progressText">0 / 10</div>
+<div class="dashboard">
+  <div class="progress-bar-container">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+  <div class="progress-text" id="progressText">0 / 10 Haircuts</div>
+
+  <div class="recent-cuts">
+    <h3>Recent Haircuts</h3>
+    <ul id="cutsList">
+      <!-- Recent cuts will appear here -->
+    </ul>
+  </div>
+
+  <button onclick="registerHaircut()">Register Haircut</button>
 </div>
 
-<p id="message">Scan the QR code each time you get a haircut.</p>
-
-<button onclick="checkIn()">Register Haircut</button>
-
 <script>
-  // Firebase configuration
+  // Firebase config
   const firebaseConfig = {
     apiKey: "YOUR_API_KEY",
     authDomain: "YOUR_AUTH_DOMAIN",
@@ -114,88 +138,74 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
 
-  // User ID
+  // User
   let userId = localStorage.getItem("lavishUser");
   if (!userId) {
     userId = prompt("Enter your phone number:");
     localStorage.setItem("lavishUser", userId);
   }
 
-  // Shop location
-  const shopLat = 31.8457; // Change to your exact latitude
-  const shopLng = -102.3676; // Change to your exact longitude
+  const maxCuts = 10;
 
-  // Generate QR code
-  new QRCode(document.getElementById("qrcode"), {
-    text: "https://YOUR_USERNAME.github.io/lavish-loyalty/",
-    width: 150,
-    height: 150,
-    colorDark: "#0f0f0f",
-    colorLight: "#ffffff",
-    correctLevel: QRCode.CorrectLevel.H
-  });
+  async function updateDashboard(cutsData) {
+    const cuts = cutsData.cuts || 0;
+    document.getElementById("progressBar").style.width = ((cuts / maxCuts) * 100) + "%";
+    document.getElementById("progressText").innerText = cuts + " / 10 Haircuts";
 
-  // Update progress circle
-  function updateCircle(count) {
-    const percent = (count / 10) * 360;
-    document.getElementById("progressCircle").style.background =
-      `conic-gradient(#00ff88 ${percent}deg, #222 ${percent}deg)`;
-    document.getElementById("progressText").innerText = count + " / 10";
+    const cutsListEl = document.getElementById("cutsList");
+    cutsListEl.innerHTML = "";
+    if (cutsData.history) {
+      cutsData.history.slice().reverse().forEach(dateStr => {
+        const li = document.createElement("li");
+        li.textContent = new Date(dateStr).toLocaleDateString();
+        cutsListEl.appendChild(li);
+      });
+    }
   }
 
-  // Register haircut
-  async function checkIn() {
-    navigator.geolocation.getCurrentPosition(async position => {
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
+  async function registerHaircut() {
+    const userRef = db.collection("customers").doc(userId);
+    const doc = await userRef.get();
+    const now = new Date();
 
-      // Validate user is at the barber shop
-      const distance = Math.sqrt(Math.pow(lat - shopLat, 2) + Math.pow(lng - shopLng, 2));
-      if (distance > 0.01) {
-        alert("You must be at Lavish Barber Shop to register your haircut.");
-        return;
-      }
+    let cutsData = { cuts: 0, history: [] };
 
-      const userRef = db.collection("customers").doc(userId);
-      const doc = await userRef.get();
-      const now = new Date();
-
-      if (!doc.exists) {
-        await userRef.set({ cuts: 1, lastVisit: now });
-        updateCircle(1);
-        return;
-      }
-
-      const data = doc.data();
-      const lastVisit = data.lastVisit.toDate();
-      const diffDays = (now - lastVisit) / (1000*60*60*24);
-
-      if (diffDays < 5) {
+    if (doc.exists) {
+      cutsData = doc.data();
+      // Check 5 days minimum
+      const lastDate = new Date(cutsData.history[cutsData.history.length - 1]);
+      const diffDays = (now - lastDate) / (1000*60*60*24);
+      if (cutsData.history.length > 0 && diffDays < 5) {
         alert("At least 5 days must pass between haircuts.");
         return;
       }
+    }
 
-      let newCuts = data.cuts + 1;
+    cutsData.cuts = (cutsData.cuts || 0) + 1;
+    cutsData.history = cutsData.history || [];
+    cutsData.history.push(now.toISOString());
 
-      if (newCuts >= 10) {
-        alert("🎉 Free haircut unlocked!");
-        await userRef.set({ cuts: 0, lastVisit: now });
-        updateCircle(0);
-      } else {
-        await userRef.set({ cuts: newCuts, lastVisit: now });
-        updateCircle(newCuts);
-      }
-    });
+    if (cutsData.cuts >= 10) {
+      alert("🎉 Free haircut unlocked!");
+      cutsData.cuts = 0; // reset
+    }
+
+    await userRef.set(cutsData);
+    updateDashboard(cutsData);
   }
 
-  // Load initial data
-  async function loadData() {
+  async function loadDashboard() {
     const userRef = db.collection("customers").doc(userId);
     const doc = await userRef.get();
-    if (doc.exists) updateCircle(doc.data().cuts);
+    if (doc.exists) {
+      updateDashboard(doc.data());
+    } else {
+      updateDashboard({cuts:0, history:[]});
+    }
   }
 
-  loadData();
+  loadDashboard();
 </script>
+
 </body>
 </html>
