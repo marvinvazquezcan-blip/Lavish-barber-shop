@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Lavish Barber Shop Loyalty</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"></script>
+  <style>
+    body {
+      background: #0f0f0f;
+      color: white;
+      font-family: Arial;
+      text-align: center;
+    }
+
+    .circle {
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      background: conic-gradient(#00ff88 0deg, #222 0deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 40px auto;
+      position: relative;
+    }
+
+    .inner {
+      width: 180px;
+      height: 180px;
+      background: #0f0f0f;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-direction: column;
+    }
+
+    button {
+      padding: 10px 20px;
+      background: #00ff88;
+      border: none;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<h1>💈 Lavish Barber Shop</h1>
+<h3>Programa de Fidelidad</h3>
+
+<div class="circle" id="progressCircle">
+  <div class="inner">
+    <div id="progressText">0 / 10</div>
+  </div>
+</div>
+
+<p id="message"></p>
+
+<button onclick="checkIn()">Escanear Corte</button>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "TU_API_KEY",
+    authDomain: "TU_AUTH_DOMAIN",
+    projectId: "TU_PROJECT_ID",
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  let userId = localStorage.getItem("lavishUser");
+
+  if (!userId) {
+    userId = prompt("Ingresa tu número de teléfono:");
+    localStorage.setItem("lavishUser", userId);
+  }
+
+  const shopLat = 31.8457; // CAMBIA por tu latitud
+  const shopLng = -102.3676; // CAMBIA por tu longitud
+
+  function updateCircle(count) {
+    let percent = (count / 10) * 360;
+    document.getElementById("progressCircle").style.background =
+      `conic-gradient(#00ff88 ${percent}deg, #222 ${percent}deg)`;
+
+    document.getElementById("progressText").innerText = count + " / 10";
+  }
+
+  async function checkIn() {
+    navigator.geolocation.getCurrentPosition(async position => {
+      let lat = position.coords.latitude;
+      let lng = position.coords.longitude;
+
+      let distance = Math.sqrt(
+        Math.pow(lat - shopLat, 2) + Math.pow(lng - shopLng, 2)
+      );
+
+      if (distance > 0.01) {
+        alert("Debes estar en Lavish Barber Shop para registrar tu corte.");
+        return;
+      }
+
+      const userRef = db.collection("customers").doc(userId);
+      const doc = await userRef.get();
+
+      let now = new Date();
+
+      if (!doc.exists) {
+        await userRef.set({
+          cuts: 1,
+          lastVisit: now
+        });
+        updateCircle(1);
+        return;
+      }
+
+      let data = doc.data();
+      let lastVisit = data.lastVisit.toDate();
+      let diffDays = (now - lastVisit) / (1000 * 60 * 60 * 24);
+
+      if (diffDays < 5) {
+        alert("Deben pasar al menos 5 días entre cortes.");
+        return;
+      }
+
+      let newCuts = data.cuts + 1;
+
+      if (newCuts >= 10) {
+        alert("🎉 Corte GRATIS desbloqueado!");
+        await userRef.set({
+          cuts: 0,
+          lastVisit: now
+        });
+        updateCircle(0);
+      } else {
+        await userRef.set({
+          cuts: newCuts,
+          lastVisit: now
+        });
+        updateCircle(newCuts);
+      }
+
+    });
+  }
+
+  async function loadData() {
+    const userRef = db.collection("customers").doc(userId);
+    const doc = await userRef.get();
+    if (doc.exists) {
+      updateCircle(doc.data().cuts);
+    }
+  }
+
+  loadData();
+</script>
+
+</body>
+</html>
